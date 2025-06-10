@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Text.Json.Serialization;
 
 namespace ProjectData
 {
@@ -123,10 +119,11 @@ namespace ProjectData
         public double DistanceFromEarth { get; set; }
         public Status Status { get; set; }
 
+        [JsonConstructor]
         public SpaceObject(string name = "", int objType = 0, double mass = 0, double distFromYearth = 0,int status=1)
         {
             Name = name;
-            if(Enum.TryParse(objType.ToString(), out ObjectType type)|| objType !> 78 || objType!< 0)
+            if(Enum.TryParse(objType.ToString(), out ObjectType type)|| !(objType > 78) || !(objType< 0))
                 ObjType = type;
             else
             {
@@ -174,6 +171,7 @@ namespace ProjectData
         public FIO Fio { get; set; }
         public int Age {  get; set; }
         public List<SpaceObject> DiscoveredObjects { get; set; } = new List<SpaceObject>();
+        [JsonConstructor]
         public Astronomer(string FirstName = "",string SurName = "",string Patronymic = "", int age=0)
         {
             if (age < 0|| age>152)

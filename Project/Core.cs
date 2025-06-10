@@ -1,14 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
+﻿using ProjectData;
 using System.Text;
-using System.Threading.Tasks;
-using ProjectData;
-using System.Reflection.PortableExecutable;
-using System.Transactions;
-using Serilog;
-using static System.Reflection.Metadata.BlobBuilder;
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using static System.Runtime.InteropServices.JavaScript.JSType;
+
+public delegate void SpaceObjectDel(SpaceObject spaceObject);
+public delegate void AstronomerDel(Astronomer astronomer);
+public delegate void DiscoveryDel(Discover discovery);
 
 namespace ProjectCore
 {
@@ -22,7 +20,7 @@ namespace ProjectCore
         private List<SpaceObject> SpaceObjects = new List<SpaceObject>();
         private List<Astronomer> Astronomers = new List<Astronomer>();
         private List<Discover> Discovers = new List<Discover>();
-        private const string DataFile = "library_data.json";
+        private const string DataFile = "SpaceCatalog_data.json";
 
         public event Action<SpaceObject, Astronomer> NewDiscovered;
         public event Action<string> OnLogMessage;
@@ -47,14 +45,31 @@ namespace ProjectCore
             SpaceObjects.Add(spaceObj);
             Log($"Space object added: {spaceObj.Name} ({spaceObj.ObjType})");
         }
-
+        
+        public void DeleteSpaceObject(string name)
+        {
+            var spaceObj = SpaceObjects.FirstOrDefault(o => o.Name == name);
+            if (spaceObj == null)
+            {
+                Log($"Ошибка: объект '{name}' не найден");
+            }
+            else if (Discovers.Any(d => d.SpaceObj.Name == name))
+            {
+                Log($"Ошибка: нельзя удалить объект '{name}' - есть связанные открытия");
+            }
+            else
+            {
+                SpaceObjects.Remove(spaceObj);
+                Log($"Объект '{name}' успешно удален");
+            }
+        }
         public void AddAstronomer(Astronomer astronomer)
         {
             if (astronomer.Fio.Equals(new FIO()))
                 throw new InvalidDataException("FIO cannot be empty");
 
             Astronomers.Add(astronomer);
-            Log($"Reader added: {astronomer.FullName} ({astronomer.Age})");
+            Log($"Astronomer added: {astronomer.FullName} ({astronomer.Age})");
         }
 
         public void UnDiscover(string Name, FIO Fio)
@@ -71,7 +86,7 @@ namespace ProjectCore
             Discovers.Add(Discover);
 
             NewDiscovered?.Invoke(SpaceObj, Astronomer);
-            Log($"Book borrowed: {SpaceObj.Name} by {Astronomer.FullName}");
+            Log($"Space Object discovered: {SpaceObj.Name} by {Astronomer.FullName}");
         }
 
         public SpaceObject[] SearchByKeyword(string keyword)
@@ -82,11 +97,11 @@ namespace ProjectCore
             .ToArray();
         }
 
-        public SpaceObject[] Filter<T>(SpaceObject[] objects, Predicate<SpaceObject> condition)
+        public T[] Filter<T>(T[] objects, Predicate<T> condition)
         {
-            List<SpaceObject> result = new List<SpaceObject>();
+            List<T> result = new List<T>();
 
-            foreach (var SpaceObject in SpaceObjects)
+            foreach (var SpaceObject in objects)
             {
                 if (condition(SpaceObject))
                 {
@@ -97,7 +112,7 @@ namespace ProjectCore
             return result.ToArray();
         }
 
-        public Dictionary<Astronomer, SpaceObject[]> GetTransactionsByAstronomer(Discover[] discovers, SpaceObject[] SpaceObjects)
+        public Dictionary<Astronomer, SpaceObject[]> GetDiscoverByAstronomer(Discover[] discovers, SpaceObject[] SpaceObjects)
         {
             var result = new Dictionary<Astronomer, SpaceObject[]>();
 
@@ -125,9 +140,9 @@ namespace ProjectCore
 
             for (int i = 0; i < sortedSpaceObject.Length - 1; i++)
             {
-                for (int j = 0; j < sortedSpaceObject.Length - i - 1; j++)
+                for (int j = 1+i; j < sortedSpaceObject.Length - 1; j++)
                 {
-                    if (String.Compare(sortedSpaceObject[j].Name, sortedSpaceObject[j + 1].Name)>j)
+                    if (string.Compare(sortedSpaceObject[i].Name, sortedSpaceObject[j].Name)>j)
                     {
                         SpaceObject temp = sortedSpaceObject[j];
                         sortedSpaceObject[j] = sortedSpaceObject[j + 1];
@@ -149,14 +164,29 @@ namespace ProjectCore
                 Console.WriteLine($"{(int)objectType}:{objectType}");
             }
         }
-        public void LoadData()
+        public void LoadData(string FileName)
         {
-            if (!File.Exists(DataFile)) return;
+            if (FileName == "") FileName = DataFile;
+            else{
+                if (FileName.Length > 5)
+                {
+                    if (FileName.Substring(FileName.Length - 5) != ".json")
+                        FileName += ".json";
+                }
+                else FileName += ".json";
+            }
+            if (!File.Exists(FileName)) return;
 
             try
             {
-                string json = File.ReadAllText(DataFile);
-                var data = JsonSerializer.Deserialize<LibraryData>(json);
+                var options = new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true,
+                    WriteIndented = true
+                };
+                string json = File.ReadAllText(FileName, Encoding.UTF8);
+                //byte[] jsonBytes = Encoding.UTF8.GetBytes(json);
+                var data = JsonSerializer.Deserialize<SpaceCatalogData>(json,options);
 
                 SpaceObjects = data.SpaceObjects ?? new List<SpaceObject>();
                 Astronomers = data.Astronomers ?? new List<Astronomer>();
@@ -172,26 +202,37 @@ namespace ProjectCore
                 Discovers = new List<Discover>();
             }
         }
-        private class LibraryData
+        public class SpaceCatalogData
         {
             public List<SpaceObject> SpaceObjects { get; set; }
             public List<Astronomer> Astronomers { get; set; }
             public List<Discover> Discovers { get; set; }
+            [JsonConstructor]
+            public SpaceCatalogData(List<SpaceObject> spaceObjects, List<Astronomer> astronomers, List<Discover> discovers)
+            {
+                SpaceObjects = spaceObjects ?? new List<SpaceObject>();
+                Astronomers = astronomers ?? new List<Astronomer>();
+                Discovers = discovers ?? new List<Discover>();
+            }
         }
 
-        public void SaveData()
+        public void SaveData(string FileName)
         {
-            var data = new
-            {
-                spaceObjects = SpaceObjects,
-                astronomers = Astronomers,
-                discovers = Discovers
-            };
+            if (FileName == "") FileName = DataFile;
+            var data = new SpaceCatalogData(SpaceObjects,Astronomers,Discovers);
 
             try
             {
                 string json = JsonSerializer.Serialize(data);
-                File.WriteAllText(DataFile, json);
+                if (FileName.Length > 5)
+                {
+                    if (FileName.Substring(FileName.Length - 5) != ".json")
+                    {
+                        File.WriteAllText(FileName + ".json", json,Encoding.UTF8);
+                    }
+                    else File.WriteAllText(FileName, json,Encoding.UTF8);
+                }
+                else File.WriteAllText(FileName + ".json", json,Encoding.UTF8);
                 Console.WriteLine("Данные успешно сохранены.");
                 Console.WriteLine(json);
             }

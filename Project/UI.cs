@@ -1,34 +1,20 @@
 ﻿using ProjectCore;
 using ProjectData;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Reflection.PortableExecutable;
-using System.Text;
-using System.Text.Json;
-using System.Threading.Tasks;
-using static System.Reflection.Metadata.BlobBuilder;
-using System.Transactions;
-using System.ComponentModel;
-using System.Security.Cryptography.X509Certificates;
 
 namespace ProjectUI
 {
     public class ConsoleInterface
     {
-        private SpaceCatalog spaceCatalog = new SpaceCatalog();
+        public static SpaceCatalog spaceCatalog = new SpaceCatalog();
         private const string DataFile = "SpaceCatalog_data.json";
 
         public ConsoleInterface()
         {
-            spaceCatalog.LoadData();
+            spaceCatalog.LoadData("");
 
             spaceCatalog.OnLogMessage += message => Console.WriteLine($"[LOG] {DateTime.Now}: {message}");
             spaceCatalog.NewDiscovered += (SpaceObject, Astronomer) =>
                 Console.WriteLine($"Notification: {Astronomer.FullName} borrowed '{SpaceObject.Name}'");
-
-            spaceCatalog.LoadData();
-            AppDomain.CurrentDomain.ProcessExit += (s, e) => spaceCatalog.SaveData();
         }
 
         public void Run()
@@ -38,12 +24,17 @@ namespace ProjectUI
             {
                 Console.WriteLine("\nMenu:");
                 Console.WriteLine("1. Add Space Object");
-                Console.WriteLine("2. Add Astronomer");
-                Console.WriteLine("3. Discover Object");
-                Console.WriteLine("4. Search Object");
-                Console.WriteLine("5. List All Objects");
-                Console.WriteLine("6. List All Objects Types");
-                Console.WriteLine("7. Exit");
+                Console.WriteLine("2. Delete Space Object");
+                Console.WriteLine("3. Add Astronomer");
+                Console.WriteLine("4. Discover Object");
+                Console.WriteLine("5. Search Object");
+                Console.WriteLine("6. Get Discover ByA stronomer");
+                Console.WriteLine("7. Filter Objects");
+                Console.WriteLine("8. List All Objects");
+                Console.WriteLine("9. List All Objects Types");
+                Console.WriteLine("10. Load Data");
+                Console.WriteLine("11. Save Data");
+                Console.WriteLine("12. Exit");
 
                 Console.Write("Select option: ");
                 var input = Console.ReadLine();
@@ -56,23 +47,44 @@ namespace ProjectUI
                             AddSpaceObject();
                             break;
                         case "2":
-                            AddAstronomer();
+                            DellSpaceObject();
                             break;
                         case "3":
-                            UnDiscover();
+                            AddAstronomer();
                             break;
                         case "4":
-                            SearchObjects();
+                            UnDiscover();
                             break;
                         case "5":
-                            ListObjects();
+                            SearchObjects();
                             break;
                         case "6":
-                            spaceCatalog.ListAllTypes();
+                            ListObjects();
                             break;
                         case "7":
-                            spaceCatalog.SaveData();
+                            FilterObjects();
+                            break;
+                        case "8":
+                            ListObjects();
+                            break;
+                        case "9":
+                            spaceCatalog.ListAllTypes();
+                            break;
+                        case "10":
+                            Console.WriteLine("Enter Load FileName: ");
+                            spaceCatalog.LoadData(Console.ReadLine());
+                            break;
+                        case "11":
+                            Console.WriteLine("Enter Save FileName: ");
+                            spaceCatalog.SaveData(Console.ReadLine());
+                            break;
+                        case "12":
+                            spaceCatalog.SaveData("");
+                            spaceCatalog.Dispose();
                             return;
+                        case "TEST":
+                            Test.TestDataCreate(); 
+                            break;
                         default:
                             Console.WriteLine("Invalid option");
                             break;
@@ -81,10 +93,6 @@ namespace ProjectUI
                 catch (Exception ex)
                 {
                     Console.WriteLine($"Error: {ex.Message}");
-                }
-                finally
-                {
-                    spaceCatalog.SaveData();
                 }
             }
         }
@@ -108,16 +116,64 @@ namespace ProjectUI
             spaceCatalog.AddSpaceObject(spaceObj);
             Console.WriteLine("Object added successfully");
         }
+        private void DellSpaceObject()
+        {
+            Console.Write("Enter Space Object Name: ");
+            var name = Console.ReadLine();
+            spaceCatalog.DeleteSpaceObject(name);
+        }
+        private void FilterObjects()
+        {
+            Console.WriteLine("\nFilter Space Objects:");
+            Console.WriteLine("1. By Mass (more than)");
+            Console.WriteLine("2. By Distance from Earth (less than)");
+            Console.WriteLine("3. By Type");
+            Console.Write("Select filter: ");
 
+            var filterChoice = Console.ReadLine();
+            var allObjects = spaceCatalog.getSpaceObj().ToArray();
+            SpaceObject[] filteredObjects = Array.Empty<SpaceObject>();
+
+            switch (filterChoice)
+            {
+                case "1": 
+                    Console.Write("Enter minimum mass: ");
+                    double minMass = double.Parse(Console.ReadLine());
+                    filteredObjects = spaceCatalog.Filter(allObjects, o => o.Mass >= minMass);
+                    break;
+
+                case "2":
+                    Console.Write("Enter maximum distance: ");
+                    double maxDist = double.Parse(Console.ReadLine());
+                    filteredObjects = spaceCatalog.Filter(allObjects, o => o.DistanceFromEarth <= maxDist);
+                    break;
+
+                case "3": 
+                    Console.Write("Enter type number: ");
+                    int typeNum = int.Parse(Console.ReadLine());
+                    filteredObjects = spaceCatalog.Filter(allObjects, o => (int)o.ObjType == typeNum);
+                    break;
+
+                default:
+                    Console.WriteLine("Invalid filter option");
+                    return;
+            }
+
+            Console.WriteLine($"\nFound {filteredObjects.Length} objects:");
+            foreach (var obj in filteredObjects)
+            {
+                Console.WriteLine(obj.ToString());
+            }
+        }
         private void AddAstronomer()
         {
-            Console.Write("Enter reader first name: ");
+            Console.Write("Enter astronomer first name: ");
             var name = Console.ReadLine();
 
-            Console.Write("Enter reader sur name: ");
+            Console.Write("Enter astronomer sur name: ");
             var surName = Console.ReadLine();
 
-            Console.Write("Enter reader Patronymic: ");
+            Console.Write("Enter astronomer Patronymic: ");
             var patronymic = Console.ReadLine();
 
             Console.Write("Enter age: ");
@@ -126,7 +182,7 @@ namespace ProjectUI
             var astronomer = new Astronomer(name,surName,patronymic,age);
 
             spaceCatalog.AddAstronomer(astronomer);
-            Console.WriteLine("Reader added successfully");
+            Console.WriteLine("Astronomer added successfully");
         }
 
         private void UnDiscover()
@@ -157,7 +213,7 @@ namespace ProjectUI
             Console.WriteLine("\nSearch results:");
             foreach (var spaceObj in results)
             {
-                Console.WriteLine(spaceCatalog.ToString());
+                Console.WriteLine(spaceObj.ToString());
             }
         }
 
